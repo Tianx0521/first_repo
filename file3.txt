@@ -1,1 +1,102 @@
-第三个文本文件03
+import gym
+import numpy as np
+import random
+import math
+
+# ------------------------------
+# 创建 FrozenLake 环境
+# ------------------------------
+# 此处设置 is_slippery=False 可使环境较为确定，便于观察训练效果
+env = gym.make("FrozenLake-v1", is_slippery=False)
+
+# ------------------------------
+# 初始化 Q 表
+# ------------------------------
+# Q 表的行数对应状态数，列数对应动作数
+Q = np.zeros((env.observation_space.n, env.action_space.n))
+
+# ------------------------------
+# 超参数设置
+# ------------------------------
+num_episodes = 2000       # 总共训练的回合数
+max_steps = 100           # 每个回合最多允许的步数
+learning_rate = 0.8       # 学习率 (alpha)
+discount_factor = 0.95    # 折扣因子 (gamma)
+
+# ε-greedy 策略相关参数
+epsilon = 1.0             # 初始探索率
+max_epsilon = 1.0         # 最大探索率
+min_epsilon = 0.01        # 最小探索率
+decay_rate = 0.005        # ε 衰减率
+
+# 用于记录每个回合获得的奖励
+rewards = []
+
+# ------------------------------
+# Q-Learning 算法训练过程
+# ------------------------------
+for episode in range(num_episodes):
+    # 重置环境并获取初始状态
+    state = env.reset()
+    # 针对新版 Gym，reset() 可能返回元组 (state, info)
+    if isinstance(state, tuple):
+        state = state[0]
+    done = False
+    total_reward = 0
+    
+    for step in range(max_steps):
+        # 根据 ε-greedy 策略选择动作
+        if random.uniform(0, 1) < epsilon:
+            action = env.action_space.sample()   # 探索：随机选择动作
+        else:
+            action = np.argmax(Q[state, :])        # 利用：选择当前 Q 表中最大的动作
+        
+        # 与环境交互，获取新的状态和奖励
+        result = env.step(action)
+        # 新旧版本 Gym API 兼容处理
+        if len(result) == 5:
+            new_state, reward, done, truncated, info = result
+            done = done or truncated
+        else:
+            new_state, reward, done, info = result
+
+        # Q-Learning 更新公式
+        Q[state, action] = Q[state, action] + learning_rate * (
+            reward + discount_factor * np.max(Q[new_state, :]) - Q[state, action]
+        )
+        
+        total_reward += reward
+        state = new_state
+        
+        if done:
+            break
+    
+    # 衰减 epsilon，使得训练后期更多利用已学到的知识
+    epsilon = min_epsilon + (max_epsilon - min_epsilon) * math.exp(-decay_rate * episode)
+    rewards.append(total_reward)
+
+print("训练结束！")
+print("最终更新后的 Q 表：")
+print(Q)
+
+# ------------------------------
+# 测试训练好的智能体
+# ------------------------------
+print("\n开始测试训练好的智能体:")
+state = env.reset()
+if isinstance(state, tuple):
+    state = state[0]
+done = False
+while not done:
+    # 选择 Q 表中对应状态下最优的动作
+    action = np.argmax(Q[state, :])
+    result = env.step(action)
+    if len(result) == 5:
+        state, reward, done, truncated, info = result
+        done = done or truncated
+    else:
+        state, reward, done, info = result
+    
+    # 打印状态、动作和获得的奖励，同时用 render() 展示环境状态
+    print(f"状态: {state}, 动作: {action}, 奖励: {reward}")
+    env.render()
